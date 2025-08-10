@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 import json
 import os
+import math
 from typing import Dict, List, Tuple
 from collections import defaultdict
 
@@ -816,6 +817,26 @@ class ProjectionAnalyzer:
         return lineup
 
 
+def clean_for_json(obj):
+    """Recursively clean data for JSON serialization"""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0
+        return round(obj, 2)  # Round to 2 decimal places
+    elif isinstance(obj, pd.Series):
+        return clean_for_json(obj.to_dict())
+    elif isinstance(obj, pd.DataFrame):
+        return clean_for_json(obj.to_dict('records'))
+    elif isinstance(obj, dict):
+        return {k: clean_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_for_json(item) for item in obj]
+    elif pd.isna(obj):  # Catch pandas NA values
+        return None
+    else:
+        return obj
+
+
 def export_for_web(analyzer, week=1):
     """Export all fantasy data as JSON files for web display"""
     
@@ -888,6 +909,9 @@ def export_for_web(analyzer, week=1):
         }
     }
     
+    # Clean the data before saving to remove NaN values
+    current_week_data = clean_for_json(current_week_data)
+    
     # Save current week data
     with open(f"{export_dir}/current_week.json", 'w') as f:
         json.dump(current_week_data, f, indent=2)
@@ -903,6 +927,9 @@ def export_for_web(analyzer, week=1):
             "maxPoints": round(pos_df['projected_points'].max(), 1)
         }
     
+    # Clean position summary
+    position_summary = clean_for_json(position_summary)
+    
     with open(f"{export_dir}/position_summary.json", 'w') as f:
         json.dump(position_summary, f, indent=2)
     
@@ -915,6 +942,9 @@ def export_for_web(analyzer, week=1):
             "position_summary.json"
         ]
     }
+    
+    # Clean index data
+    index_data = clean_for_json(index_data)
     
     with open(f"{export_dir}/index.json", 'w') as f:
         json.dump(index_data, f, indent=2)
